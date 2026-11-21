@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MixerLive.App/MixerLive.App.csproj" />
+    <Project Path="src/MixerLive.Core/MixerLive.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MixerLive.Tests/MixerLive.Tests.csproj" />
+  </Folder>
+</Solution>

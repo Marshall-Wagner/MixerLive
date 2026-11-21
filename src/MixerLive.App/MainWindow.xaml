@@ -1,0 +1,453 @@
+<Window x:Class="MixerLive.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:MixerLive.App.ViewModels"
+        xmlns:ctrl="clr-namespace:MixerLive.App.Controls"
+        Title="MixerLive"
+        Width="1180" Height="940" MinWidth="980" MinHeight="660"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource BgBrush}" Foreground="{StaticResource TextBrush}"
+        FontFamily="Segoe UI" FontSize="12" UseLayoutRounding="True">
+
+    <Window.Resources>
+        <Style x:Key="StatusText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="MaxHeight" Value="28"/>
+            <Setter Property="Margin" Value="0,3,0,4"/>
+            <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding StatusKind}" Value="Ok">
+                    <Setter Property="Foreground" Value="{StaticResource OkBrush}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding StatusKind}" Value="Waiting">
+                    <Setter Property="Foreground" Value="{StaticResource WarnBrush}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding StatusKind}" Value="Error">
+                    <Setter Property="Foreground" Value="{StaticResource DangerBrush}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- ================= OBS-STYLE VERTICAL SLIDER ================= -->
+        <!-- Thin track, blue from the bottom up to the handle, grey above, classic flat white handle.
+             The whole 20 px width is clickable; PART_Track stays so FaderScale can line its numbers up. -->
+        <SolidColorBrush x:Key="FaderFillBrush" Color="#3E7BD6"/>
+        <SolidColorBrush x:Key="FaderTrackBrush" Color="#4A4E57"/>
+
+        <Style x:Key="FaderTrackButton" TargetType="RepeatButton">
+            <Setter Property="OverridesDefaultStyle" Value="True"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="IsTabStop" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RepeatButton">
+                        <Border Background="Transparent">
+                            <Border Width="4" CornerRadius="2" HorizontalAlignment="Center" Background="{TemplateBinding Background}"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="FaderThumb" TargetType="Thumb">
+            <Setter Property="OverridesDefaultStyle" Value="True"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <!-- The classic flat handle (Windows' standard vertical-slider thumb, 18 × 11). -->
+                    <ControlTemplate TargetType="Thumb">
+                        <Border x:Name="Knob" Width="18" Height="11"
+                                Background="#F0F0F0" BorderBrush="#ACACAC" BorderThickness="1"/>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Knob" Property="Background" Value="#DCECFC"/>
+                                <Setter TargetName="Knob" Property="BorderBrush" Value="#7EB4EA"/>
+                            </Trigger>
+                            <Trigger Property="IsDragging" Value="True">
+                                <Setter TargetName="Knob" Property="Background" Value="#CCE4F7"/>
+                                <Setter TargetName="Knob" Property="BorderBrush" Value="#569DE5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <ControlTemplate x:Key="ObsVerticalSlider" TargetType="Slider">
+            <Grid Width="20" Background="Transparent" SnapsToDevicePixels="True">
+                <Track x:Name="PART_Track" Orientation="Vertical">
+                    <Track.DecreaseRepeatButton>
+                        <RepeatButton Style="{StaticResource FaderTrackButton}" Background="{StaticResource FaderFillBrush}" Command="Slider.DecreaseLarge"/>
+                    </Track.DecreaseRepeatButton>
+                    <Track.IncreaseRepeatButton>
+                        <RepeatButton Style="{StaticResource FaderTrackButton}" Background="{StaticResource FaderTrackBrush}" Command="Slider.IncreaseLarge"/>
+                    </Track.IncreaseRepeatButton>
+                    <Track.Thumb>
+                        <Thumb Style="{StaticResource FaderThumb}"/>
+                    </Track.Thumb>
+                </Track>
+            </Grid>
+            <ControlTemplate.Triggers>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.4"/>
+                </Trigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+
+        <Style x:Key="Fader" TargetType="Slider">
+            <Setter Property="Template" Value="{StaticResource ObsVerticalSlider}"/>
+            <Setter Property="Orientation" Value="Vertical"/>
+            <Setter Property="Minimum" Value="-60"/>
+            <Setter Property="Maximum" Value="12"/>
+            <Setter Property="SmallChange" Value="0.5"/>
+            <Setter Property="LargeChange" Value="3"/>
+            <Setter Property="IsMoveToPointEnabled" Value="True"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="ToolTip" Value="Fader (-60 … +12 dB). Mouse wheel: ±1 dB (Ctrl: ±0.1 dB). Double-click resets to 0 dB."/>
+        </Style>
+
+        <Style x:Key="GainBox" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+            <Setter Property="FontFamily" Value="Consolas"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Padding" Value="2,1"/>
+            <Setter Property="HorizontalContentAlignment" Value="Right"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <!-- ================= LEVEL METER (strips and buses) ================= -->
+        <!-- Peak readout on top, OBS-style meter with the dB scale below; 130 px tall like the fader. -->
+        <DataTemplate DataType="{x:Type vm:MeterViewModel}">
+            <StackPanel>
+                <TextBlock Text="{Binding PeakText}" HorizontalAlignment="Center" FontFamily="Consolas" FontSize="10" Height="12">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsClipping}" Value="True">
+                                    <Setter Property="Foreground" Value="{StaticResource DangerBrush}"/>
+                                    <Setter Property="FontWeight" Value="Bold"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                <ctrl:LevelMeter Width="38" Height="118"
+                                 LeftDb="{Binding LevelL}" RightDb="{Binding LevelR}"
+                                 LeftHoldDb="{Binding HoldL}" RightHoldDb="{Binding HoldR}"/>
+            </StackPanel>
+        </DataTemplate>
+
+        <!-- ================= INPUT STRIP ================= -->
+        <DataTemplate DataType="{x:Type vm:StripViewModel}">
+            <Border Style="{StaticResource ChannelPanel}" Width="214">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="{Binding Title}" Style="{StaticResource PanelTitle}"/>
+                    <TextBox DockPanel.Dock="Top" Text="{Binding Label, UpdateSourceTrigger=PropertyChanged}"
+                             Margin="0,4,0,4" FontWeight="Bold" HorizontalContentAlignment="Center"
+                             ToolTip="Strip label"/>
+                    <ComboBox DockPanel.Dock="Top" ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}"
+                              DisplayMemberPath="Display" ToolTip="{Binding DeviceHint}"/>
+                    <TextBlock DockPanel.Dock="Top" Text="{Binding Status}" Style="{StaticResource StatusText}" ToolTip="{Binding Status}"/>
+
+                    <UniformGrid DockPanel.Dock="Top" Columns="5" Margin="0,0,0,4">
+                        <ToggleButton Content="A1" IsChecked="{Binding A1}" Margin="1" ToolTip="Send to hardware output A1"/>
+                        <ToggleButton Content="A2" IsChecked="{Binding A2}" Margin="1" ToolTip="Send to hardware output A2"/>
+                        <ToggleButton Content="A3" IsChecked="{Binding A3}" Margin="1" ToolTip="Send to hardware output A3"/>
+                        <ToggleButton Content="B1" IsChecked="{Binding B1}" Margin="1" ToolTip="Send to virtual output B1"/>
+                        <ToggleButton Content="B2" IsChecked="{Binding B2}" Margin="1" ToolTip="Send to virtual output B2"/>
+                    </UniformGrid>
+                    <UniformGrid DockPanel.Dock="Top" Rows="1" Margin="0,0,0,6">
+                        <ToggleButton Content="MONO" IsChecked="{Binding Mono}" Margin="1"/>
+                        <ToggleButton Content="SOLO" IsChecked="{Binding Solo}" Margin="1"/>
+                        <ToggleButton Content="EXCL" IsChecked="{Binding Exclusive}" Margin="1" Visibility="{Binding IsHardware, Converter={StaticResource BoolToVis}}"
+                                      ToolTip="Exclusive mode: MixerLive owns this device and reads its native format with the smallest driver buffer. Bypasses Windows mixing and system-wide effects such as Equalizer APO on this device; load your EQ .txt file into this channel's EQ instead."/>
+                        <ToggleButton Content="MUTE" IsChecked="{Binding Mute}" Margin="1" Tag="{StaticResource DangerBrush}"/>
+                    </UniformGrid>
+
+                    <!-- Strip effects: 3-band EQ on virtual strips, gate/comp on hardware strips -->
+                    <Grid DockPanel.Dock="Top" Margin="0,0,0,6">
+                        <StackPanel Visibility="{Binding IsVirtual, Converter={StaticResource BoolToVis}}">
+                            <Grid Margin="0,1">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="44"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="34"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="BASS" Style="{StaticResource SmallLabel}"/>
+                                <Slider Grid.Column="1" Minimum="-12" Maximum="12" Value="{Binding EqLowDb}" VerticalAlignment="Center" IsMoveToPointEnabled="True" ToolTip="Low shelf, 200 Hz"/>
+                                <TextBlock Grid.Column="2" Text="{Binding EqLowText}" Style="{StaticResource ValueText}"/>
+                            </Grid>
+                            <Grid Margin="0,1">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="44"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="34"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="MID" Style="{StaticResource SmallLabel}"/>
+                                <Slider Grid.Column="1" Minimum="-12" Maximum="12" Value="{Binding EqMidDb}" VerticalAlignment="Center" IsMoveToPointEnabled="True" ToolTip="Peak, 1 kHz"/>
+                                <TextBlock Grid.Column="2" Text="{Binding EqMidText}" Style="{StaticResource ValueText}"/>
+                            </Grid>
+                            <Grid Margin="0,1">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="44"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="34"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="TREBLE" Style="{StaticResource SmallLabel}"/>
+                                <Slider Grid.Column="1" Minimum="-12" Maximum="12" Value="{Binding EqHighDb}" VerticalAlignment="Center" IsMoveToPointEnabled="True" ToolTip="High shelf, 5 kHz"/>
+                                <TextBlock Grid.Column="2" Text="{Binding EqHighText}" Style="{StaticResource ValueText}"/>
+                            </Grid>
+                        </StackPanel>
+
+                        <StackPanel Visibility="{Binding IsHardware, Converter={StaticResource BoolToVis}}">
+                            <Grid Margin="0,1">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="46"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="44"/>
+                                </Grid.ColumnDefinitions>
+                                <ToggleButton Content="GATE" IsChecked="{Binding GateEnabled}" Margin="0,0,4,0" ToolTip="Noise gate on/off"/>
+                                <Slider Grid.Column="1" Minimum="-80" Maximum="-10" Value="{Binding GateThresholdDb}" VerticalAlignment="Center" IsMoveToPointEnabled="True" ToolTip="Gate threshold"/>
+                                <TextBlock Grid.Column="2" Text="{Binding GateText}" Style="{StaticResource ValueText}"/>
+                            </Grid>
+                            <Grid Margin="0,1">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="46"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="44"/>
+                                </Grid.ColumnDefinitions>
+                                <ToggleButton Content="COMP" IsChecked="{Binding CompEnabled}" Margin="0,0,4,0" ToolTip="Compressor on/off (threshold -40 dB, auto make-up)"/>
+                                <Slider Grid.Column="1" Minimum="1" Maximum="8" Value="{Binding CompRatio}" VerticalAlignment="Center" IsMoveToPointEnabled="True" ToolTip="Compression ratio"/>
+                                <TextBlock Grid.Column="2" Text="{Binding CompText}" Style="{StaticResource ValueText}"/>
+                            </Grid>
+                            <!-- Parametric EQ (same editor as the buses) and the keyboard-click suppressor -->
+                            <UniformGrid Rows="1" Margin="0,2,0,0">
+                                <ToggleButton Content="EQ" IsChecked="{Binding Eq.EqOn}" Margin="0,0,2,0"
+                                              ToolTip="Parametric EQ on this input on/off (yellow = on). Edit it with EQ…"/>
+                                <Button Content="EQ…" Command="{Binding OpenEqCommand}" Margin="2,0"
+                                        ToolTip="Edit this input's parametric EQ: up to 32 cells per channel, or load any parametric EQ .txt file (PEQdB, AutoEq, REW, Equalizer APO). With MONO on, the LEFT cells shape the whole signal."/>
+                                <ToggleButton Content="KEYS" IsChecked="{Binding Keys}" Margin="2,0,0,0"
+                                              ToolTip="Keyboard-click suppressor. Listens for the sharp, sudden clicks of key presses and turns this input down by 24 dB for a few hundredths of a second each time it hears one, so chat partners hear far less typing. Hard consonants (t, k, s) spoken while typing can get clipped a little. Adds 3 ms of delay on this input."/>
+                            </UniformGrid>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Fader + meter -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <!-- dB numbers every 12 dB, lined up with the fader's tick marks -->
+                            <ctrl:FaderScale Target="{Binding ElementName=FaderSlider}" Width="22" Height="130" Margin="0,0,1,0"/>
+                            <Slider x:Name="FaderSlider" Style="{StaticResource Fader}" Value="{Binding GainDb}" Height="130" MouseDoubleClick="Fader_MouseDoubleClick" PreviewMouseWheel="Fader_PreviewMouseWheel"/>
+                        </StackPanel>
+                        <ContentPresenter Grid.Column="1" Content="{Binding Meter}" Margin="8,0,0,0" VerticalAlignment="Center"
+                                          ToolTip="Input level before the fader, in dBFS (0 = the digital maximum). The number on top is the loudest peak of the last 2 seconds; it turns red at 0.0 or more, which means clipping."/>
+                        <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,4,0,0">
+                            <TextBox Style="{StaticResource GainBox}" Width="50" Tag="db"
+                                     Text="{Binding GainDbText, UpdateSourceTrigger=LostFocus}"
+                                     PreviewMouseWheel="GainBox_PreviewMouseWheel" PreviewKeyDown="GainBox_PreviewKeyDown" GotKeyboardFocus="GainBox_GotKeyboardFocus"
+                                     ToolTip="Gain in dB (-inf = off … +12). Type a value and press Enter. Mouse wheel or ↑/↓: ±1 dB (Ctrl: ±0.1 dB)."/>
+                            <TextBlock Text="dB" Style="{StaticResource SmallLabel}" Margin="3,0,10,0"/>
+                            <TextBox Style="{StaticResource GainBox}" Width="42" Tag="pct"
+                                     Text="{Binding VolumePercentText, UpdateSourceTrigger=LostFocus}"
+                                     PreviewMouseWheel="GainBox_PreviewMouseWheel" PreviewKeyDown="GainBox_PreviewKeyDown" GotKeyboardFocus="GainBox_GotKeyboardFocus"
+                                     ToolTip="Volume in % of perceived loudness: 100 % = 0 dB, 50 % = half as loud (-10 dB), 25 % = -20 dB, 0 % = off. Above 100 % boosts, up to 230 % (+12 dB). Type a value and press Enter. Mouse wheel or ↑/↓: ±2 % (Ctrl: ±0.5 %)."/>
+                            <TextBlock Text="%" Style="{StaticResource SmallLabel}" Margin="3,0,0,0"/>
+                        </StackPanel>
+                        <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="{Binding XrunText}" HorizontalAlignment="Center" FontSize="9" Foreground="{StaticResource MutedTextBrush}" Height="12"/>
+                    </Grid>
+                </DockPanel>
+            </Border>
+        </DataTemplate>
+
+        <!-- ================= OUTPUT BUS ================= -->
+        <DataTemplate DataType="{x:Type vm:BusViewModel}">
+            <Border Style="{StaticResource ChannelPanel}" Width="214">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="{Binding Title}" Style="{StaticResource PanelTitle}"/>
+                    <TextBox DockPanel.Dock="Top" Text="{Binding Label, UpdateSourceTrigger=PropertyChanged}"
+                             Margin="0,4,0,4" FontWeight="Bold" HorizontalContentAlignment="Center" ToolTip="Bus label"/>
+                    <ComboBox DockPanel.Dock="Top" ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}"
+                              DisplayMemberPath="Display" ToolTip="{Binding DeviceHint}"/>
+                    <TextBlock DockPanel.Dock="Top" Text="{Binding Status}" Style="{StaticResource StatusText}" ToolTip="{Binding Status}"/>
+
+                    <UniformGrid DockPanel.Dock="Top" Rows="1" Margin="0,0,0,6">
+                        <UniformGrid.Resources>
+                            <!-- Five buttons share 198 px: trim padding so the labels are not clipped. -->
+                            <Style TargetType="ToggleButton" BasedOn="{StaticResource {x:Type ToggleButton}}">
+                                <Setter Property="Padding" Value="0,3"/>
+                                <Setter Property="FontSize" Value="10.5"/>
+                            </Style>
+                        </UniformGrid.Resources>
+                        <ToggleButton Content="MONO" IsChecked="{Binding Mono}" Margin="1"/>
+                        <ToggleButton Content="EQ" IsChecked="{Binding Eq.EqOn}" Margin="1" ToolTip="Bus parametric EQ on/off (yellow = on)"/>
+                        <Button Content="EQ…" Command="{Binding OpenEqCommand}" Margin="1" Padding="0,3" FontSize="10.5" ToolTip="Edit the parametric EQ: up to 32 cells per channel, or load any parametric EQ .txt file (PEQdB, AutoEq, REW, Equalizer APO)"/>
+                        <ToggleButton Content="EXCL" IsChecked="{Binding Exclusive}" Margin="1"
+                                      ToolTip="Exclusive mode: MixerLive owns this device and writes its native format (e.g. 32-bit 768 kHz) with the smallest driver buffer. Bypasses Windows mixing and system-wide effects such as Equalizer APO on this device; load your EQ .txt file into this channel's EQ instead."/>
+                        <ToggleButton Content="MUTE" IsChecked="{Binding Mute}" Margin="1" Tag="{StaticResource DangerBrush}"/>
+                    </UniformGrid>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <!-- dB numbers every 12 dB, lined up with the fader's tick marks -->
+                            <ctrl:FaderScale Target="{Binding ElementName=FaderSlider}" Width="22" Height="130" Margin="0,0,1,0"/>
+                            <Slider x:Name="FaderSlider" Style="{StaticResource Fader}" Value="{Binding GainDb}" Height="130" MouseDoubleClick="Fader_MouseDoubleClick" PreviewMouseWheel="Fader_PreviewMouseWheel"/>
+                        </StackPanel>
+                        <ContentPresenter Grid.Column="1" Content="{Binding Meter}" Margin="8,0,0,0" VerticalAlignment="Center"
+                                          ToolTip="Output level after the EQ and fader: what is sent to the device, in dBFS (0 = the digital maximum). The number on top is the loudest peak of the last 2 seconds; it turns red at 0.0 or more, which means the output clips."/>
+
+                        <!-- Device volume: the output device's own Windows volume (hardware on most USB DACs) -->
+                        <StackPanel Grid.Column="2" Margin="10,0,0,0" Width="38"
+                                    Visibility="{Binding HasDeviceVolume, Converter={StaticResource BoolToVis}}"
+                                    IsEnabled="{Binding DeviceVolumeEffective}" ToolTip="{Binding DeviceVolumeHint}">
+                            <TextBlock Text="DEVICE" Style="{StaticResource SmallLabel}" FontSize="9" HorizontalAlignment="Center"/>
+                            <Slider Template="{StaticResource ObsVerticalSlider}" Orientation="Vertical" Minimum="0" Maximum="100" Height="96" Margin="0,2"
+                                    HorizontalAlignment="Center" IsMoveToPointEnabled="True" SmallChange="1" LargeChange="10"
+                                    Value="{Binding DeviceVolume}" PreviewMouseWheel="DeviceVolume_PreviewMouseWheel"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <TextBox Style="{StaticResource GainBox}" Width="28" Tag="dev"
+                                         Text="{Binding DeviceVolumeText, UpdateSourceTrigger=LostFocus}"
+                                         PreviewMouseWheel="GainBox_PreviewMouseWheel" PreviewKeyDown="GainBox_PreviewKeyDown" GotKeyboardFocus="GainBox_GotKeyboardFocus"/>
+                                <TextBlock Text="%" Style="{StaticResource SmallLabel}" Margin="2,0,0,0"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="1" Grid.ColumnSpan="3" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,4,0,0">
+                            <TextBox Style="{StaticResource GainBox}" Width="50" Tag="db"
+                                     Text="{Binding GainDbText, UpdateSourceTrigger=LostFocus}"
+                                     PreviewMouseWheel="GainBox_PreviewMouseWheel" PreviewKeyDown="GainBox_PreviewKeyDown" GotKeyboardFocus="GainBox_GotKeyboardFocus"
+                                     ToolTip="Gain in dB (-inf = off … +12). Type a value and press Enter. Mouse wheel or ↑/↓: ±1 dB (Ctrl: ±0.1 dB)."/>
+                            <TextBlock Text="dB" Style="{StaticResource SmallLabel}" Margin="3,0,10,0"/>
+                            <TextBox Style="{StaticResource GainBox}" Width="42" Tag="pct"
+                                     Text="{Binding VolumePercentText, UpdateSourceTrigger=LostFocus}"
+                                     PreviewMouseWheel="GainBox_PreviewMouseWheel" PreviewKeyDown="GainBox_PreviewKeyDown" GotKeyboardFocus="GainBox_GotKeyboardFocus"
+                                     ToolTip="Volume in % of perceived loudness: 100 % = 0 dB, 50 % = half as loud (-10 dB), 25 % = -20 dB, 0 % = off. Above 100 % boosts, up to 230 % (+12 dB). Type a value and press Enter. Mouse wheel or ↑/↓: ±2 % (Ctrl: ±0.5 %)."/>
+                            <TextBlock Text="%" Style="{StaticResource SmallLabel}" Margin="3,0,0,0"/>
+                        </StackPanel>
+                        <TextBlock Grid.Row="2" Grid.ColumnSpan="3" Text="{Binding XrunText}" HorizontalAlignment="Center" FontSize="9" Foreground="{StaticResource MutedTextBrush}" Height="12"/>
+                    </Grid>
+                </DockPanel>
+            </Border>
+        </DataTemplate>
+    </Window.Resources>
+
+    <DockPanel>
+        <!-- Top bar -->
+        <Border DockPanel.Dock="Top" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="0,0,0,1" Padding="12,8">
+            <DockPanel>
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
+                    <TextBlock Text="MixerLive" FontSize="18" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding ProfileName, StringFormat='  ·  {0}'}" FontSize="13" Foreground="{StaticResource MutedTextBrush}" VerticalAlignment="Center"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <ToggleButton x:Name="LockButton" IsChecked="{Binding IsLocked}" Margin="4,0,16,0" Padding="10,4" FontSize="12" MinWidth="88"
+                                  ToolTip="Lock the mixer like Voicemeeter's Lock GUI: faders, buttons, devices and settings ignore the mouse, wheel and keyboard until you unlock. Meters keep running. Remembered across restarts. Also in the tray menu.">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontWeight="Normal" Text="{Binding LockGlyph}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBlock Text="{Binding LockText}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </ToggleButton>
+                    <Button Content="{Binding EngineButtonText}" Command="{Binding ToggleEngineCommand}" Margin="4,0" MinWidth="96" IsEnabled="{Binding IsUnlocked}"/>
+                    <Button Content="Restart engine" Command="{Binding RestartEngineCommand}" Margin="4,0"/>
+                    <Button Content="Import Voicemeeter settings…" Command="{Binding ImportVoicemeeterCommand}" Style="{StaticResource AccentButton}" Margin="16,0,4,0" IsEnabled="{Binding IsUnlocked}"/>
+                    <Button Content="Load profile…" Command="{Binding LoadProfileCommand}" Margin="4,0" IsEnabled="{Binding IsUnlocked}"
+                            ToolTip="Load a MixerLive profile (.json). If it contains audio settings (rate, buffer size, latency, resampler) that differ from yours, you are asked whether to apply them. Picking a Voicemeeter .xml runs the Voicemeeter import."/>
+                    <Button Content="Save profile as…" Command="{Binding SaveProfileAsCommand}" Margin="4,0"
+                            ToolTip="Export the whole mixer plus the audio settings (rate, buffer size, latency, resampler) to one .json file. Lock and tray preferences stay on this PC."/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Voicemeeter warning -->
+        <Border DockPanel.Dock="Top" Background="#3E2A0C" BorderBrush="#6B4A14" BorderThickness="0,0,0,1" Padding="12,6"
+                Visibility="{Binding VoicemeeterRunning, Converter={StaticResource BoolToVis}}">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Close Voicemeeter" Command="{Binding CloseVoicemeeterCommand}" Margin="12,0,0,0" VerticalAlignment="Center"/>
+                <TextBlock TextWrapping="Wrap" VerticalAlignment="Center" Foreground="{StaticResource WarnBrush}"
+                           Text="Voicemeeter is running. Both mixers would play to the same outputs and the virtual inputs would be heard twice, so close Voicemeeter while using MixerLive."/>
+            </DockPanel>
+        </Border>
+
+        <!-- Status bar -->
+        <Border DockPanel.Dock="Bottom" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="0,1,0,0" Padding="12,6">
+            <DockPanel>
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                    <StackPanel Orientation="Horizontal" IsEnabled="{Binding IsUnlocked}">
+                    <CheckBox Content="Run at Windows sign-in" IsChecked="{Binding RunAtLogon}" Margin="0,0,12,0"
+                              ToolTip="Registers a Task Scheduler sign-in task (delayed 8 s, not affected by the Settings → Apps → Startup switch)."/>
+                    <CheckBox Content="Start engine on launch" IsChecked="{Binding AutoStartEngine}" Margin="0,0,12,0"/>
+                    <CheckBox Content="Close to tray" IsChecked="{Binding CloseToTray}" Margin="0,0,4,0"/>
+                    </StackPanel>
+                    <Button Content="Logs" Command="{Binding OpenLogsCommand}" Margin="12,0,0,0" Padding="8,3"/>
+                </StackPanel>
+                <Button DockPanel.Dock="Left" Content="Audio settings…" Command="{Binding OpenAudioSettingsCommand}" IsEnabled="{Binding IsUnlocked}" Margin="0,0,12,0" Padding="8,3"
+                        ToolTip="Sample rate, buffer size, latency and resampler in one place, with the resulting latency of each open device."/>
+                <TextBlock Text="{Binding EngineStatusText}" VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}"
+                           TextTrimming="CharacterEllipsis" ToolTip="{Binding EngineStatusDetail}"/>
+            </DockPanel>
+        </Border>
+
+        <!-- Mixer -->
+        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Background="Transparent">
+            <StackPanel x:Name="MixerArea" Margin="8,4">
+                <StackPanel.Style>
+                    <!-- Locked: nothing in the mixer reacts to mouse, wheel or Tab; meters still update. -->
+                    <Style TargetType="StackPanel">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsLocked}" Value="True">
+                                <Setter Property="IsHitTestVisible" Value="False"/>
+                                <Setter Property="KeyboardNavigation.TabNavigation" Value="None"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </StackPanel.Style>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="INPUTS" Style="{StaticResource SectionHeader}"/>
+                    <StackPanel Orientation="Horizontal" Margin="16,6,0,2" VerticalAlignment="Center"
+                                Visibility="{Binding IsLocked, Converter={StaticResource BoolToVis}}">
+                        <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE72E;" FontSize="11"
+                                   Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <TextBlock Text="Settings are locked. Click Locked at the top, or use the tray menu, to change anything."
+                                   FontSize="11" Foreground="{StaticResource MutedTextBrush}" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </StackPanel>
+                <ItemsControl ItemsSource="{Binding Strips}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                </ItemsControl>
+
+                <TextBlock Text="OUTPUTS" Style="{StaticResource SectionHeader}"/>
+                <ItemsControl ItemsSource="{Binding Buses}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                </ItemsControl>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

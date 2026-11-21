@@ -1,0 +1,123 @@
+<Window x:Class="MixerLive.App.Dialogs.BusEqWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:MixerLive.App.ViewModels"
+        Title="{Binding Title, StringFormat='EQ – {0}'}"
+        Width="780" Height="680" MinWidth="680" MinHeight="460"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Background="{StaticResource BgBrush}" Foreground="{StaticResource TextBrush}" FontFamily="Segoe UI" FontSize="12">
+
+    <Window.Resources>
+        <DataTemplate x:Key="CellTemplate" DataType="{x:Type vm:EqCellViewModel}">
+            <Grid Margin="0,2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="24"/>
+                    <ColumnDefinition Width="30"/>
+                    <ColumnDefinition Width="96"/>
+                    <ColumnDefinition Width="70"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="64"/>
+                    <ColumnDefinition Width="50"/>
+                    <ColumnDefinition Width="28"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="{Binding Number}" VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}"/>
+                <CheckBox Grid.Column="1" IsChecked="{Binding On}" VerticalAlignment="Center" ToolTip="Cell on/off"/>
+                <ComboBox Grid.Column="2" ItemsSource="{Binding Types}" SelectedIndex="{Binding Type}" Margin="0,0,6,0"/>
+                <TextBox Grid.Column="3" Text="{Binding Freq, StringFormat={}{0:0}, UpdateSourceTrigger=LostFocus}" Margin="0,0,6,0" ToolTip="Frequency (Hz)" HorizontalContentAlignment="Right"/>
+                <Slider Grid.Column="4" Minimum="-18" Maximum="18" Value="{Binding GainDb}" VerticalAlignment="Center" IsMoveToPointEnabled="True" TickFrequency="6" TickPlacement="BottomRight"/>
+                <TextBlock Grid.Column="5" Text="{Binding GainText}" Style="{StaticResource ValueText}" Margin="6,0"/>
+                <TextBox Grid.Column="6" Text="{Binding Q, StringFormat={}{0:0.00}, UpdateSourceTrigger=LostFocus}" ToolTip="Q (bandwidth)" HorizontalContentAlignment="Right"/>
+                <Button Grid.Column="7" Content="✕" Command="{Binding RemoveCommand}" Padding="4,0" Margin="4,0,0,0" FontSize="10"
+                        Visibility="{Binding CanRemove, Converter={StaticResource BoolToVis}}" ToolTip="Remove this cell"/>
+            </Grid>
+        </DataTemplate>
+
+        <DataTemplate x:Key="HeaderTemplate">
+            <Grid Margin="0,0,0,2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="24"/>
+                    <ColumnDefinition Width="30"/>
+                    <ColumnDefinition Width="96"/>
+                    <ColumnDefinition Width="70"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="64"/>
+                    <ColumnDefinition Width="50"/>
+                    <ColumnDefinition Width="28"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="1" Text="On" Style="{StaticResource SmallLabel}"/>
+                <TextBlock Grid.Column="2" Text="Type" Style="{StaticResource SmallLabel}"/>
+                <TextBlock Grid.Column="3" Text="Hz" Style="{StaticResource SmallLabel}"/>
+                <TextBlock Grid.Column="4" Text="Gain" Style="{StaticResource SmallLabel}"/>
+                <TextBlock Grid.Column="6" Text="Q" Style="{StaticResource SmallLabel}"/>
+            </Grid>
+        </DataTemplate>
+    </Window.Resources>
+
+    <DockPanel Margin="12">
+        <!-- Top: enable + preamp -->
+        <Grid DockPanel.Dock="Top" Margin="0,0,0,6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="64"/>
+            </Grid.ColumnDefinitions>
+            <CheckBox Content="EQ enabled" IsChecked="{Binding EqOn}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,16,0"/>
+            <TextBlock Grid.Column="1" Text="Preamp" Style="{StaticResource SmallLabel}" Margin="0,0,8,0"/>
+            <Slider Grid.Column="2" Minimum="-30" Maximum="12" Value="{Binding EqPreampDb}" VerticalAlignment="Center" IsMoveToPointEnabled="True" TickFrequency="6" TickPlacement="BottomRight"
+                    ToolTip="Gain applied with the EQ (the 'Preamp:' line of an EQ .txt file). Keep it negative to avoid clipping on boosts."/>
+            <TextBlock Grid.Column="3" Text="{Binding EqPreampText}" Style="{StaticResource ValueText}" Margin="6,0,0,0"/>
+        </Grid>
+
+        <!-- Import / tools -->
+        <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+            <Button Content="Import EQ file (.txt)…" Click="ImportFile_Click" Style="{StaticResource AccentButton}" Margin="0,0,6,4"
+                    ToolTip="Load any parametric EQ .txt file into both channels: 'Preamp: …' and 'Filter N: ON PK Fc … Gain … Q …' lines, as saved by PEQdB, AutoEq, REW or Equalizer APO. Equalizer APO does not need to be installed."/>
+            <Button x:Name="ImportActiveButton" Content="Use active Equalizer APO config" Click="ImportActive_Click" Margin="0,0,6,4"
+                    ToolTipService.ShowOnDisabled="True"
+                    ToolTip="Only if Equalizer APO is installed: copies whatever it is currently set to run (config.txt including its Include files)"/>
+            <Button Content="Copy left → right" Click="CopyLeftToRight_Click" Margin="0,0,6,4"/>
+            <Button Content="Reset flat" Click="Reset_Click" Margin="0,0,6,4"/>
+        </WrapPanel>
+
+        <!-- Mono strips: only the left cells act -->
+        <TextBlock DockPanel.Dock="Top" Text="{Binding MonoNote}" TextWrapping="Wrap" FontSize="11" Foreground="{StaticResource WarnBrush}" Margin="0,0,0,8">
+            <TextBlock.Style>
+                <Style TargetType="TextBlock">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding MonoNote}" Value="">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </TextBlock.Style>
+        </TextBlock>
+
+        <!-- Bottom: info + close -->
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+            <Button DockPanel.Dock="Right" Content="Close" Click="Close_Click" MinWidth="90" IsCancel="True" VerticalAlignment="Bottom"/>
+            <TextBlock Text="{Binding EqInfo}" TextWrapping="Wrap" Foreground="{StaticResource OkBrush}" FontSize="11" Margin="0,0,12,0" VerticalAlignment="Center"/>
+        </DockPanel>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="+ cell" Click="AddLeft_Click" Padding="6,2" FontSize="11" IsEnabled="{Binding CanAddCells}"/>
+                    <TextBlock Text="LEFT CHANNEL" Style="{StaticResource SectionHeader}" Margin="0,0,0,2"/>
+                </DockPanel>
+                <ContentControl ContentTemplate="{StaticResource HeaderTemplate}" Content="{Binding}"/>
+                <ItemsControl ItemsSource="{Binding EqLeft}" ItemTemplate="{StaticResource CellTemplate}"/>
+
+                <DockPanel Margin="0,12,0,0">
+                    <Button DockPanel.Dock="Right" Content="+ cell" Click="AddRight_Click" Padding="6,2" FontSize="11" IsEnabled="{Binding CanAddCells}"/>
+                    <TextBlock Text="RIGHT CHANNEL" Style="{StaticResource SectionHeader}" Margin="0,0,0,2"/>
+                </DockPanel>
+                <ContentControl ContentTemplate="{StaticResource HeaderTemplate}" Content="{Binding}"/>
+                <ItemsControl ItemsSource="{Binding EqRight}" ItemTemplate="{StaticResource CellTemplate}"/>
+
+                <TextBlock Margin="0,12,0,0" TextWrapping="Wrap" Foreground="{StaticResource MutedTextBrush}" FontSize="11"
+                           Text="Cell types follow Voicemeeter's numbering (Peak, Low-pass, Band-pass, High-pass, Notch, Low shelf, High shelf). Imported files map PK/LSC/HSC/LP/HP/NO/BP onto them; a peak cell at 0 dB costs nothing. Up to 32 cells per channel."/>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</Window>
