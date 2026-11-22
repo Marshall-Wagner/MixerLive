@@ -4,7 +4,8 @@ A small, dependable audio mixer for Windows, laid out like **Voicemeeter Banana*
 input strips feeding 3 hardware (A1–A3) + 2 virtual (B1–B2) output buses, with gate, compressor, EQ,
 routing buttons, faders, mute/solo/mono and OBS-style meters. It adds what Banana lacks:
 
-* **WASAPI exclusive mode for hi-res DACs**, up to 32-bit 768 kHz (Banana's engine stops at 192 kHz),
+* **hi-res output up to 32-bit 768 kHz** in WASAPI exclusive mode (Banana also plays in exclusive mode, but
+  its engine tops out at 192 kHz),
 * a **parametric EQ that loads EQ presets saved as .txt files** (from PEQdB, AutoEq, REW or Equalizer APO;
   Equalizer APO itself is not needed), on every output and on microphones,
 * **KEYS**, a keyboard-click suppressor for microphones,
@@ -29,13 +30,47 @@ re-plugged while it runs.
 
 MixerLive's WASAPI exclusive mode unlocks audio quality that Windows' shared mode cannot provide. For example,
 the **Fiio KA15** USB DAC is limited to 32-bit 384 kHz in Windows shared WASAPI mode, but MixerLive accesses
-it at the full **32-bit 768 kHz** in exclusive mode. This applies to any high-end DAC that supports hi-res
-formats above what Windows' shared mixer exposes.
+it at the full **32-bit 768 kHz** in exclusive mode. This has been verified on real hardware and applies to
+any high-end DAC that supports hi-res formats above what Windows' shared mixer exposes.
 
 | Mode | Sample Rate (Fiio KA15) | Latency | Quality Impact |
 |---|---|---|---|
 | Windows shared WASAPI | Up to 32-bit / 384 kHz | Higher (mixed by system) | Forced resampling, system mixer overhead |
-| MixerLive exclusive WASAPI | Up to 32-bit / **768 kHz** | Lower (direct path) | Bit-perfect, no system mixing |
+| MixerLive exclusive WASAPI | Up to 32-bit / **768 kHz** | Lower (direct path) | No Windows mixer in the path; MixerLive's own 32-bit float mix, EQ and resampling |
+
+The screenshot below shows the FiiO control panel reporting a current sample rate of **768000 Hz** while the
+KA15 is driven by MixerLive in exclusive WASAPI mode — well above the 384 kHz ceiling that Windows' shared
+mode imposes.
+
+![FiiO KA15 running at 768000 Hz via MixerLive's exclusive WASAPI](images/fio-ka15-768khz.png)
+
+### Compatibility with games
+
+Some games go **completely silent** when the playback device they use is set to 32-bit 384 kHz in Windows.
+These titles produce no sound with that setting:
+
+* **Hotline Miami**
+* **Hotline Miami 2: Wrong Number**
+* **THE FINALS**
+
+With MixerLive they work and the DAC still runs at its full rate: games play into `Voicemeeter Input`, which
+you leave at a format games handle (for example 24-bit 48 or 192 kHz), and MixerLive converts that audio and
+drives the DAC at 768 kHz in exclusive mode.
+
+### Performance
+
+MixerLive is built to stay out of the way of games:
+
+* The mixer thread is woken by a high-resolution timer instead of spinning on the CPU, so it leaves processor
+  time to games and to Windows' own audio engine. It uses 0.5 % of one core at 48 kHz and 7.5 % at 768 kHz
+  on a desktop Ryzen 9.
+* Memory stays flat: in a 17-hour run, memory use and handle counts did not grow.
+* It installs no driver of its own.
+
+From my own use: while Voicemeeter Banana was running on my PC, games had frame-pacing problems and even
+basic tasks felt sluggish. Since switching to MixerLive (with Voicemeeter installed but closed), games run
+smoothly and Discord feels noticeably quicker. That's one PC and not a controlled test, so I can't say
+exactly what caused it, but the difference was easy to notice.
 
 ## Download and first start
 
