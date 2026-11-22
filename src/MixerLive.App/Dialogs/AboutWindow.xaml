@@ -1,0 +1,51 @@
+<Window x:Class="MixerLive.App.Dialogs.AboutWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="About MixerLive"
+        Width="480" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Background="{StaticResource BgBrush}" Foreground="{StaticResource TextBrush}" FontFamily="Segoe UI" FontSize="12">
+
+    <StackPanel Margin="24,20,24,20">
+        <!-- App name and version -->
+        <TextBlock x:Name="AppTitle" Text="MixerLive" FontWeight="Bold" FontSize="18" Foreground="{StaticResource AccentBrush}"
+                   HorizontalAlignment="Center" Margin="0,0,0,4"/>
+        <TextBlock x:Name="VersionText" Text="" FontWeight="SemiBold" FontSize="13"
+                   HorizontalAlignment="Center" Margin="0,0,0,12"/>
+
+        <!-- Description -->
+        <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource MutedTextBrush}"
+                   Text="A lightweight, high-performance replacement for Voicemeeter Banana built with WASAPI exclusive mode audio engine."
+                   HorizontalAlignment="Center" Margin="0,0,0,16"/>
+
+        <!-- Divider -->
+        <Border BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="0,1,0,0" Margin="0,0,0,12"/>
+
+        <!-- Features list -->
+        <TextBlock Text="Features" FontWeight="SemiBold" FontSize="13" Foreground="{StaticResource AccentBrush}" Margin="0,0,0,8"/>
+        <StackPanel Margin="0,0,0,16">
+            <TextBlock TextWrapping="Wrap"><Run FontWeight="SemiBold">WASAPI Exclusive Mode</Run> — Bypasses Windows shared-mode resampling for true bit-perfect audio</TextBlock>
+            <TextBlock TextWrapping="Wrap" Margin="0,4,0,0"><Run FontWeight="SemiBold">Hi-Res Audio Support</Run> — Up to 32-bit / 768 kHz (limited by hardware)</TextBlock>
+            <TextBlock TextWrapping="Wrap" Margin="0,4,0,0"><Run FontWeight="SemiBold">Parametric EQ</Run> — Full parametric equalizer on all buses with real-time preview</TextBlock>
+            <TextBlock TextWrapping="Wrap" Margin="0,4,0,0"><Run FontWeight="SemiBold">Low Latency</Run> — Optimized DSP pipeline with Sinc resampling and adaptive buffering</TextBlock>
+            <TextBlock TextWrapping="Wrap" Margin="0,4,0,0"><Run FontWeight="SemiBold">Voicemeeter Banana Replacement</Run> — Import Voicemeeter XML profiles for quick migration</TextBlock>
+        </StackPanel>
+
+        <!-- Divider -->
+        <Border BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="0,1,0,0" Margin="0,0,0,12"/>
+
+        <!-- Credits -->
+        <TextBlock Text="Credits" FontWeight="SemiBold" FontSize="13" Foreground="{StaticResource AccentBrush}" Margin="0,0,0,8"/>
+        <StackPanel>
+            <TextBlock TextWrapping="Wrap"><Run FontWeight="SemiBold">Developer</Run><LineBreak/>Marshall Wagner</TextBlock>
+            <TextBlock TextWrapping="Wrap" Margin="0,6,0,0"><Run FontWeight="SemiBold">License</Run><LineBreak/>MIT License — Free and open source software.</TextBlock>
+        </StackPanel>
+
+        <!-- Divider -->
+        <Border BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="0,1,0,0" Margin="0,12,0,0"/>
+
+        <!-- OK button -->
+        <Button Content="OK" HorizontalAlignment="Right" MinWidth="80" Margin="0,12,0,0" Padding="16,4"
+                IsDefault="True" Click="Ok_Click" Style="{StaticResource AccentButton}"/>
+    </StackPanel>
+</Window>

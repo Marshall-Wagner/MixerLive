@@ -42,6 +42,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     public ICommand SaveProfileAsCommand { get; }
     public ICommand OpenLogsCommand { get; }
     public ICommand OpenAudioSettingsCommand { get; }
+    public ICommand AboutCommand { get; }
     public ICommand CloseVoicemeeterCommand { get; }
     public ICommand ExitCommand { get; }
 
@@ -61,6 +62,7 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
         SaveProfileAsCommand = new RelayCommand(SaveProfileAsInteractive);
         OpenLogsCommand = new RelayCommand(OpenLogs);
         OpenAudioSettingsCommand = new RelayCommand(OpenAudioSettings);
+        AboutCommand = new RelayCommand(OpenAbout);
         CloseVoicemeeterCommand = new RelayCommand(CloseVoicemeeter);
         ExitCommand = new RelayCommand(RequestExit);
 
@@ -419,6 +421,13 @@ public sealed class MainViewModel : ViewModelBase, IDisposable
     {
         var wnd = new AudioSettingsWindow(Engine, EngineSettings.From(Settings)) { Owner = Application.Current.MainWindow };
         if (wnd.ShowDialog() == true && wnd.Result != null) ApplyEngineSettings(wnd.Result, "from the Audio settings window");
+    }
+
+    /// <summary>About: shows version info and credits.</summary>
+    private void OpenAbout()
+    {
+        var wnd = new AboutWindow { Owner = Application.Current.MainWindow };
+        wnd.ShowDialog();
     }
 
     /// <summary>

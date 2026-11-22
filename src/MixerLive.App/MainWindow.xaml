@@ -402,8 +402,10 @@
                 </StackPanel>
                 <Button DockPanel.Dock="Left" Content="Audio settings…" Command="{Binding OpenAudioSettingsCommand}" IsEnabled="{Binding IsUnlocked}" Margin="0,0,12,0" Padding="8,3"
                         ToolTip="Sample rate, buffer size, latency and resampler in one place, with the resulting latency of each open device."/>
-                <TextBlock Text="{Binding EngineStatusText}" VerticalAlignment="Center" Foreground="{StaticResource MutedTextBrush}"
-                           TextTrimming="CharacterEllipsis" ToolTip="{Binding EngineStatusDetail}"/>
+                <StackPanel Orientation="Horizontal">
+                    <Button Content="About…" Command="{Binding AboutCommand}" Margin="0,0,4,0" Padding="8,3"/>
+                    <Button Content="Logs" Command="{Binding OpenLogsCommand}" Padding="8,3"/>
+                </StackPanel>
             </DockPanel>
         </Border>
 
