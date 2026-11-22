@@ -23,15 +23,15 @@ public partial class AboutWindow : Window
             var version = assembly.GetName().Version;
 
             // Build a clean version string: Major.Minor.Patch (e.g., "0.1.0")
-            VersionText.Text = $"Version {version.Major}.{version.Minor}.{version.Build}";
+            VersionText.Text = $"Version {version?.Major}.{version?.Minor}.{version?.Build}";
 
             // Also update the window title with version
-            Title = $"About MixerLive — v{version.Major}.{version.Minor}.{version.Build}";
+            Title = $"About MixerLive — v{version?.Major}.{version?.Minor}.{version?.Build}";
         }
         catch (Exception ex)
         {
             VersionText.Text = "Version information unavailable";
-            Log.Warn($"Could not read assembly version info: {ex.Message}");
+            Console.WriteLine($"Could not read assembly version info: {ex.Message}");
         }
     }
 
